@@ -1,3 +1,3 @@
-git add server.js
-git commit -m "Fix filename to server.js"
-git push origin main
+git add package.json package-lock.json
+git commit -m "Add cors dependency"
+git push
