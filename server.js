@@ -3,16 +3,17 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
 const { google } = require('googleapis');
-const serviceAccount = require('./service-account.json');
 
 const app = express();
 app.use(bodyParser.json());
-app.use(cors()); // Allow cross-origin requests
+app.use(cors()); // allow cross-origin requests
 
-// Replace with your calendar ID
+// Replace with your Google Calendar ID
 const CALENDAR_ID = 'd3284274ed68a03eb5bdf2d01a0dd96ad1b9959a276e03b666ed1641e8a7ec9d@group.calendar.google.com';
 
-// JWT client for service account
+// Load service account from Render secret environment variable
+const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_JSON);
+
 const jwtClient = new google.auth.JWT(
   serviceAccount.client_email,
   null,
@@ -38,7 +39,6 @@ app.get('/bookedDates', async (req, res) => {
       orderBy: 'startTime'
     });
 
-    // Count bookings per day
     const bookedMap = {};
     response.data.items.forEach(event => {
       const date = event.start.date || event.start.dateTime.split('T')[0];
