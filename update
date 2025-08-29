@@ -1,0 +1,3 @@
+git add server.js
+git commit -m "Use env variable for Google service account"
+git push origin main
