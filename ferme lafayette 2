@@ -1,0 +1,3 @@
+git add package.json
+git commit -m "Fix package.json start script"
+git push origin main
