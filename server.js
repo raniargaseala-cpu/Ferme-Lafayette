@@ -12,7 +12,7 @@ app.use(cors()); // allow cross-origin requests
 const CALENDAR_ID = 'd3284274ed68a03eb5bdf2d01a0dd96ad1b9959a276e03b666ed1641e8a7ec9d@group.calendar.google.com';
 
 // Load service account from Render secret environment variable
-const serviceAccount = JSON.parse(process.env.SERVICE_ACCOUNT_JSON);
+const serviceAccount = JSON.parse(process.env.GOOGLE_ACCOUNT_JSON);
 
 const jwtClient = new google.auth.JWT(
   serviceAccount.client_email,
@@ -75,3 +75,4 @@ app.post('/addBooking', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+
