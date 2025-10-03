@@ -179,7 +179,111 @@
 
   <!-- Robust JS -->
   <script>
-    // (insert the full Step 2 script here — the one with abs(), postJSON(), buildDescription() etc.)
+    (function() {
+      const inEl = document.getElementById('check_in');
+      const outEl = document.getElementById('check_out');
+      const toISO = d => d.toISOString().slice(0,10);
+      const today = new Date(); today.setHours(0,0,0,0);
+      inEl.min = toISO(today);
+      function syncCheckoutMin() {
+        if (!inEl.value) return;
+        const ci = new Date(inEl.value);
+        const nextDay = new Date(ci); nextDay.setDate(ci.getDate()+1);
+        outEl.min = toISO(nextDay);
+        if (outEl.value && new Date(outEl.value) <= ci) outEl.value = outEl.min;
+      }
+      inEl.addEventListener('change', syncCheckoutMin);
+      syncCheckoutMin();
+    })();
+
+    function openDialog(msg, isError=false) {
+      const d = document.getElementById('submitDialog');
+      document.getElementById('submitDialogTitle').textContent = isError ? 'Submission issue' : 'Request submitted 🎉';
+      document.getElementById('submitDialogBody').innerHTML = msg;
+      d.showModal();
+      document.getElementById('dialogCloseBtn').onclick = () => d.close();
+    }
+
+    function abs(path) {
+      const base = window.location.origin.replace(/\/+$/,'');
+      const p = String(path || '').startsWith('/') ? path : '/' + path;
+      return base + p;
+    }
+
+    async function postJSON(url, payload) {
+      try {
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type':'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify(payload)
+        });
+        const ok = res.status >= 200 && res.status < 300;
+        let data = null;
+        try { data = await res.json(); } catch {}
+        return { ok, status: res.status, data };
+      } catch (e) {
+        return { ok: false, status: 'network', error: String(e) };
+      }
+    }
+
+    function buildDescription(form) {
+      const els = form.querySelectorAll('input, select, textarea');
+      const lines = [];
+      els.forEach(el => {
+        if (!el.name || el.type === 'submit' || el.type === 'button') return;
+        if (el.closest('.honeypot')) return;
+        const label = form.querySelector(`label[for="${el.id}"]`)?.textContent || el.name;
+        const val = el.type === 'checkbox' ? (el.checked ? 'Yes' : 'No') : (el.value || '—');
+        lines.push(`${label}: ${val}`);
+      });
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Paris';
+      lines.push(`Timezone: ${tz}`);
+      lines.push(`Submitted at: ${new Date().toLocaleString()}`);
+      return lines.join('\n');
+    }
+
+    document.getElementById('booking-form').addEventListener('submit', async e => {
+      e.preventDefault();
+      const form = e.target;
+
+      const checkIn = form.check_in.value;
+      const checkOut = form.check_out.value;
+      if (!checkIn || !checkOut || new Date(checkOut) <= new Date(checkIn)) {
+        return openDialog('Please select a valid check-in and later check-out date.', true);
+      }
+
+      if (form.company.value) {
+        openDialog('Thanks! Your request has been received.', false);
+        form.reset();
+        return;
+      }
+
+      const payload = Object.fromEntries(new FormData(form).entries());
+      payload.submitted_at = new Date().toISOString();
+
+      const reserveURL = abs("/api/reserve");
+      const calendarURL = abs("/api/calendar/add");
+
+      const reserveRes = await postJSON(reserveURL, payload);
+      if (!reserveRes.ok) {
+        return openDialog(`We couldn't save your reservation.<br><small>Status: ${reserveRes.status}</small>`, true);
+      }
+
+      const desc = buildDescription(form);
+      const adults = Number(payload.adults || 1);
+      const event = {
+        title: `Booking: ${(payload.first_name || '')} ${(payload.last_name || '')} (${adults} adult${adults===1?'':'s'})`.trim(),
+        start: payload.check_in,
+        end: payload.check_out,
+        description: desc,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Paris'
+      };
+      await postJSON(calendarURL, event);
+
+      openDialog('Thank you! Your request has been submitted. You’ll receive a confirmation email shortly.');
+      form.reset();
+    });
   </script>
 </body>
 </html>
