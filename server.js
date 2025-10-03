@@ -1,78 +1,89 @@
 // server.js
-const express = require('express');
-const bodyParser = require('body-parser');
-const cors = require('cors');
-const { google } = require('googleapis');
+import express from "express";
+import path from "path";
+import { fileURLToPath } from "url";
+import { google } from "googleapis";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
-app.use(bodyParser.json());
-app.use(cors()); // allow cross-origin requests
 
-// Replace with your Google Calendar ID
-const CALENDAR_ID = 'd3284274ed68a03eb5bdf2d01a0dd96ad1b9959a276e03b666ed1641e8a7ec9d@group.calendar.google.com';
+// --- Middleware ---
+app.use(express.json({ limit: "1mb" }));
+app.use(express.urlencoded({ extended: true }));
 
-// Load service account from Render secret environment variable
-const serviceAccount = JSON.parse(process.env.GOOGLE_ACCOUNT_JSON);
-
-const jwtClient = new google.auth.JWT(
-  serviceAccount.client_email,
-  null,
-  serviceAccount.private_key,
-  ['https://www.googleapis.com/auth/calendar']
+// Serve static site (your booking form lives in /public)
+app.use(
+  express.static(path.join(__dirname, "public"), {
+    setHeaders: (res) => res.setHeader("Cache-Control", "public, max-age=300"),
+  })
 );
 
-const calendar = google.calendar({ version: 'v3', auth: jwtClient });
+// Health check for Render
+app.get("/healthz", (_req, res) => res.status(200).send("ok"));
 
-// --- Endpoint to fetch booked dates ---
-app.get('/bookedDates', async (req, res) => {
+// --- API: /api/reserve ---
+// Accepts the JSON payload from the booking form. Return 200 so the UI never sees a 404.
+app.post("/api/reserve", async (req, res) => {
   try {
-    await jwtClient.authorize();
-    const today = new Date();
-    const maxDate = new Date();
-    maxDate.setMonth(maxDate.getMonth() + 12);
-
-    const response = await calendar.events.list({
-      calendarId: CALENDAR_ID,
-      timeMin: today.toISOString(),
-      timeMax: maxDate.toISOString(),
-      singleEvents: true,
-      orderBy: 'startTime'
-    });
-
-    const bookedMap = {};
-    response.data.items.forEach(event => {
-      const date = event.start.date || event.start.dateTime.split('T')[0];
-      bookedMap[date] = (bookedMap[date] || 0) + 1;
-    });
-
-    res.json(bookedMap);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
+    const data = req.body || {};
+    // TODO (optional): persist to DB or send email confirmation here.
+    return res.status(200).json({ ok: true });
+  } catch (e) {
+    console.error("Reserve handler error:", e);
+    return res.status(500).json({ error: "Reserve failed" });
   }
 });
 
-// --- Endpoint to add a new booking ---
-app.post('/addBooking', async (req, res) => {
+// --- API: /api/calendar/add ---
+// Inserts an all-day event into Google Calendar.
+app.post("/api/calendar/add", async (req, res) => {
   try {
-    const { name, email, adults, checkin, checkout, dinner } = req.body;
-    await jwtClient.authorize();
+    const { title, start, end, description, timezone } = req.body || {};
+    if (!title || !start || !end) {
+      return res.status(400).json({ error: "Missing title/start/end" });
+    }
+
+    const auth = new google.auth.JWT({
+      email: process.env.GCAL_CLIENT_EMAIL,
+      key: (process.env.GCAL_PRIVATE_KEY || "").replace(/\\n/g, "\n"),
+      scopes: ["https://www.googleapis.com/auth/calendar"],
+    });
+
+    const calendar = google.calendar({ version: "v3", auth });
+
+    // 🔒 Hard-coded Calendar ID
+    const calendarId =
+      "d3284274ed68a03eb5bdf2d01a0dd96ad1b9959a276e03b666ed1641e8a7ec9d@group.calendar.google.com";
 
     const event = {
-      summary: `Booking: ${name}${dinner ? ' + Dinner' : ''}`,
-      description: `Booking from ${checkin} to ${checkout}. Total adults: ${adults}${dinner ? ' (Dinner included)' : ''}`,
-      start: { date: checkin },
-      end: { date: checkout }
+      summary: title,
+      description: description || "",
+      start: { date: start, timeZone: timezone || "Europe/Paris" }, // all-day
+      end: { date: end, timeZone: timezone || "Europe/Paris" },     // all-day
     };
 
-    await calendar.events.insert({ calendarId: CALENDAR_ID, resource: event });
-    res.json({ status: 'ok' });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ status: 'error', error: err.message });
+    const resp = await calendar.events.insert({
+      calendarId,
+      requestBody: event,
+    });
+
+    return res.status(200).json({ ok: true, eventId: resp.data.id });
+  } catch (e) {
+    console.error("Calendar insert failed:", e?.response?.data || e);
+    return res.status(500).json({ error: "Calendar insert failed" });
   }
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
+// Fallback to index.html for non-API routes
+app.get("*", (req, res, next) => {
+  if (req.path.startsWith("/api/")) return next(); // leave API 404s as-is
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
+// Start server
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+  console.log(`Ferme Lafayette running on ${port}`);
+});
