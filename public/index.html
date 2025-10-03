@@ -1,5 +1,185 @@
-Ferme-Lafayette/
-├── server.js
-├── package.json
-├── public/
-    └── index.html   <-- booking form goes here
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ferme Lafayette — Booking Form</title>
+  <style>
+    :root { --gap: 12px; --radius: 10px; --border: #e2e8f0; --text: #0f172a; --muted:#475569; }
+    body { font-family: system-ui, sans-serif; color: var(--text); margin: 0; background: #fafafa; }
+    .container { max-width: 860px; margin: 32px auto; padding: 0 16px; }
+    h1 { margin: 0 0 18px; font-size: 1.6rem; }
+    form { background: #fff; border: 1px solid var(--border); border-radius: 16px; padding: 22px; box-shadow: 0 4px 16px rgba(2,6,23,.04); }
+    fieldset { border: none; padding: 0; margin: 18px 0; }
+    legend { font-weight: 700; margin-bottom: 10px; color: var(--muted); }
+    .grid { display: grid; gap: var(--gap); }
+    .grid-2 { grid-template-columns: repeat(2, 1fr); }
+    .grid-3 { grid-template-columns: repeat(3, 1fr); }
+    @media (max-width: 720px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    label { font-size: .95rem; }
+    input, select, textarea {
+      width: 100%; padding: 12px; border-radius: var(--radius);
+      border: 1px solid var(--border); font-size: 1rem;
+    }
+    textarea { min-height: 110px; resize: vertical; }
+    .actions { display: flex; gap: 12px; align-items: center; margin-top: 10px; }
+    .btn-primary {
+      border: 0; padding: 12px 18px; border-radius: 999px;
+      background: #0ea5e9; color: #fff; font-weight: 700; cursor: pointer;
+    }
+    .muted { color: var(--muted); font-size: .9rem; }
+    .honeypot { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+
+    dialog { border: 0; border-radius: 16px; padding: 20px; max-width: 520px; box-shadow: 0 12px 32px rgba(2,6,23,.22); }
+    dialog::backdrop { background: rgba(2,6,23,.45); }
+    .modal-title { margin: 0 0 8px; font-weight: 700; font-size: 1.15rem; }
+    .modal-actions { display: flex; justify-content: flex-end; margin-top: 14px; }
+    .btn { border: 1px solid var(--border); padding: 10px 14px; border-radius: 999px; background: #fff; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Book Your Stay</h1>
+
+    <form
+      id="booking-form"
+      novalidate
+      data-reserve-endpoints='["/api/reserve"]'
+      data-calendar-endpoints='["/api/calendar/add"]'
+    >
+      <!-- Honeypot anti-bot -->
+      <div class="honeypot">
+        <label for="company">Company</label>
+        <input type="text" id="company" name="company" autocomplete="off" tabindex="-1" />
+      </div>
+
+      <!-- Stay details -->
+      <fieldset>
+        <legend>Stay Details</legend>
+        <div class="grid grid-3">
+          <div class="field">
+            <label for="check_in">Check-in</label>
+            <input type="date" id="check_in" name="check_in" required />
+          </div>
+          <div class="field">
+            <label for="check_out">Check-out</label>
+            <input type="date" id="check_out" name="check_out" required />
+          </div>
+          <div class="field">
+            <label for="adults">Adults</label>
+            <input type="number" id="adults" name="adults" min="1" step="1" value="2" required />
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- Room options -->
+      <fieldset>
+        <legend>Room Options</legend>
+        <div class="grid grid-2">
+          <div class="field">
+            <label for="extra_baby_bed">Extra Baby Bed</label>
+            <select id="extra_baby_bed" name="extra_baby_bed">
+              <option value="no" selected>No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="special_requests">Special Requests (optional)</label>
+            <textarea id="special_requests" name="special_requests"></textarea>
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- Guest details -->
+      <fieldset>
+        <legend>Guest Details</legend>
+        <div class="grid grid-2">
+          <div class="field">
+            <label for="first_name">First Name</label>
+            <input type="text" id="first_name" name="first_name" required />
+          </div>
+          <div class="field">
+            <label for="last_name">Last Name</label>
+            <input type="text" id="last_name" name="last_name" required />
+          </div>
+        </div>
+        <div class="grid grid-2">
+          <div class="field">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" required />
+          </div>
+          <div class="field">
+            <label for="phone">Phone (optional)</label>
+            <input type="tel" id="phone" name="phone" />
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- Address -->
+      <fieldset>
+        <legend>Address</legend>
+        <div class="grid">
+          <div class="field">
+            <label for="address_line1">Address Line 1</label>
+            <input type="text" id="address_line1" name="address_line1" required />
+          </div>
+          <div class="field">
+            <label for="address_line2">Address Line 2 (optional)</label>
+            <input type="text" id="address_line2" name="address_line2" />
+          </div>
+        </div>
+        <div class="grid grid-3">
+          <div class="field">
+            <label for="city">City</label>
+            <input type="text" id="city" name="city" required />
+          </div>
+          <div class="field">
+            <label for="postal_code">Postal Code</label>
+            <input type="text" id="postal_code" name="postal_code" required />
+          </div>
+          <div class="field">
+            <label for="state">State / Province (optional)</label>
+            <input type="text" id="state" name="state" />
+          </div>
+        </div>
+        <div class="grid">
+          <div class="field">
+            <label for="country">Country</label>
+            <input type="text" id="country" name="country" required />
+          </div>
+        </div>
+      </fieldset>
+
+      <!-- Consent -->
+      <fieldset>
+        <div class="field">
+          <label>
+            <input type="checkbox" name="consent" required />
+            I agree to the terms and privacy policy.
+          </label>
+        </div>
+      </fieldset>
+
+      <div class="actions">
+        <button type="submit" class="btn-primary">Book Now</button>
+        <span class="muted">You’ll receive a confirmation by email.</span>
+      </div>
+    </form>
+  </div>
+
+  <!-- Success / error dialog -->
+  <dialog id="submitDialog">
+    <h2 class="modal-title" id="submitDialogTitle">Request submitted 🎉</h2>
+    <p id="submitDialogBody">Thank you! You’ll receive a confirmation email shortly.</p>
+    <div class="modal-actions">
+      <button class="btn" id="dialogCloseBtn">Close</button>
+    </div>
+  </dialog>
+
+  <!-- Robust JS -->
+  <script>
+    // (insert the full Step 2 script here — the one with abs(), postJSON(), buildDescription() etc.)
+  </script>
+</body>
+</html>
